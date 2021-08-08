@@ -1,5 +1,17 @@
 # UI Native
-Jailbreak tweak to bring some native iOS APIs for web.
+Jailbreak tweak to bring some native iOS APIs to web.
+
+## Curretly Supported APIs:
+### Feedback
+  
+- Usage: `UINative.feedback(<type>)`
+- Types: `selection`, `light`, `medium`, `heavy`, `rigid`, `soft`, `success`, `warning`, `error`
+- Example:
+```JavaScript
+if (window.UINative) {
+    UINative.feedback("selection");
+}
+```
 
 ## Building:
 This tweak is built with [orion](https://github.com/theos/orion) via [theos](https://github.com/theos/theos).
