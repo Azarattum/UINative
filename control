@@ -1,0 +1,9 @@
+Package: com.azarattum.uinative
+Name: UINative
+Version: 0.0.2
+Architecture: iphoneos-arm
+Description: Native UI APIs for web.
+Maintainer: Azarattum
+Author: Azarattum
+Section: Tweaks
+Depends: ${ORION}, firmware (>= 13.0)
