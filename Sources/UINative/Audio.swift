@@ -178,6 +178,11 @@ class Audio {
       return .success
     }
 
+    commandCenter.previousTrackCommand.addTarget { [self] event in
+      seek(to: 0)
+      return .success
+    }
+
     commandCenter.skipForwardCommand.isEnabled = false
     commandCenter.skipForwardCommand.addTarget { [self] event in
       guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
@@ -190,6 +195,14 @@ class Audio {
       guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
       seek(to: player.currentTime() - CMTime(seconds: event.interval, preferredTimescale: 1))
       return .success
+    }
+
+    player.addPeriodicTimeObserver(
+      forInterval: CMTimeMakeWithSeconds(1, preferredTimescale: 1), queue: DispatchQueue.main
+    ) { (CMTime) -> Void in
+      if player.currentItem?.status == .readyToPlay && player.rate != 0.0 {
+        updatePlayback()
+      }
     }
 
     rateObserver = player.observe(\.rate, options: .initial) {
