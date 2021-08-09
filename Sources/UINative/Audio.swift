@@ -18,12 +18,19 @@ class Audio {
       Audio.player.replaceCurrentItem(with: self.item)
       self.updateMetadata()
     }
+
     Audio.player.play()
   }
 
   func pause() {
     if Audio.player.currentItem == self.item {
       Audio.player.pause()
+    }
+  }
+
+  func seek(to: Double) {
+    if Audio.player.currentItem == self.item {
+      Audio.seek(to: to)
     }
   }
 
@@ -97,6 +104,16 @@ class Audio {
     infoCenter.nowPlayingInfo = self.metadata
   }
 
+  static func seek(to: Double) {
+    seek(to: CMTime(seconds: to, preferredTimescale: 1))
+  }
+
+  static func seek(to: CMTime) {
+    player.seek(to: to) { _ in
+      updatePlayback()
+    }
+  }
+
   static func updatePlayback() {
     let infoCenter = MPNowPlayingInfoCenter.default()
     var info = infoCenter.nowPlayingInfo ?? [String: Any]()
@@ -140,11 +157,38 @@ class Audio {
 
     commandCenter.changePlaybackPositionCommand.addTarget { [self] event in
       let time = (event as! MPChangePlaybackPositionCommandEvent).positionTime
-      player.seek(to: CMTime(seconds: time, preferredTimescale: 1)) {
-        isFinished in
-        if isFinished { self.updatePlayback() }
-      }
+      seek(to: time)
+      return .success
+    }
 
+    commandCenter.seekForwardCommand.addTarget { [self] event in
+      guard let event = event as? MPSeekCommandEvent else { return .commandFailed }
+      self.player.rate = (event.type == .beginSeeking ? 3.0 : 1.0)
+      return .success
+    }
+
+    commandCenter.seekBackwardCommand.addTarget { [self] event in
+      guard let event = event as? MPSeekCommandEvent else { return .commandFailed }
+      self.player.rate = (event.type == .beginSeeking ? -3.0 : 1.0)
+      return .success
+    }
+
+    commandCenter.nextTrackCommand.addTarget { [self] event in
+      seek(to: player.currentItem?.duration.seconds ?? 0)
+      return .success
+    }
+
+    commandCenter.skipForwardCommand.isEnabled = false
+    commandCenter.skipForwardCommand.addTarget { [self] event in
+      guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
+      seek(to: player.currentTime() + CMTime(seconds: event.interval, preferredTimescale: 1))
+      return .success
+    }
+
+    commandCenter.skipBackwardCommand.isEnabled = false
+    commandCenter.skipBackwardCommand.addTarget { [self] event in
+      guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
+      seek(to: player.currentTime() - CMTime(seconds: event.interval, preferredTimescale: 1))
       return .success
     }
 

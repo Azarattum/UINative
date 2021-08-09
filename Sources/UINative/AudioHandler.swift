@@ -27,6 +27,15 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
         guard let id = info["id"] as? String else { break }
         self.play(id: id)
         break
+      case "pause":
+        guard let id = info["id"] as? String else { break }
+        self.pause(id: id)
+        break
+      case "seek":
+        guard let id = info["id"] as? String else { break }
+        guard let data = info["data"] as? Double else { break }
+        self.seek(id: id, to: data)
+        break
       default:
         break
       }
@@ -55,6 +64,20 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
   func play(id: String) {
     if let item = audios[id] {
       item.play()
+      return
+    }
+  }
+
+  func pause(id: String) {
+    if let item = audios[id] {
+      item.pause()
+      return
+    }
+  }
+
+  func seek(id: String, to: Double) {
+    if let item = audios[id] {
+      item.seek(to: to)
       return
     }
   }

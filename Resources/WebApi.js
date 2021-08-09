@@ -29,6 +29,19 @@ class NativeAudio extends Audio {
       this.use("play");
     };
 
+    this.pause = () => {
+      this.use("pause");
+    };
+
+    this.onplay = this.play;
+    this.onpause = this.pause;
+
+    Object.defineProperty(this, "currentTime", {
+      set(value) {
+        this.use("seek", value);
+      },
+    });
+
     Object.defineProperty(this, "src", {
       set(value) {
         this.use("setSource", value);
