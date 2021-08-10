@@ -5,6 +5,7 @@ window.UINative = {
 
   nativeAudio: () => {
     {
+      document.createEvent("Event").initEvent("aduioCallback", false, false);
       window.webkit.messageHandlers.audio.postMessage({
         action: "enable",
       });
@@ -33,9 +34,6 @@ class NativeAudio extends Audio {
       this.use("pause");
     };
 
-    this.onplay = this.play;
-    this.onpause = this.pause;
-
     Object.defineProperty(this, "currentTime", {
       set(value) {
         this.use("seek", value);
@@ -52,6 +50,20 @@ class NativeAudio extends Audio {
       set(value) {
         this.use("setMetadata", value);
       },
+    });
+
+    Object.defineProperty(this, "preload", {
+      set() {},
+    });
+
+    document.addEventListener("aduioCallback", (event) => {
+      if (id === event.id && event.action) {
+        let action = event.action;
+        if (action.startsWith("on")) {
+          action = action.substr(2).toLowerCase();
+          this.dispatchEvent(new Event(action));
+        }
+      }
     });
 
     if (src) this.src = src;

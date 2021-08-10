@@ -16,7 +16,8 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
       case "setSource":
         guard let id = info["id"] as? String else { break }
         guard let data = info["data"] as? String else { break }
-        self.setSource(id: id, source: data)
+        guard let web = message.webView else { break }
+        self.setSource(id: id, source: data, web: web)
         break
       case "setMetadata":
         guard let id = info["id"] as? String else { break }
@@ -47,12 +48,32 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     Audio.setupControls()
   }
 
-  func setSource(id: String, source: String) {
+  func setSource(id: String, source: String, web: WKWebView) {
     if let item = audios[id] {
       item.setSource(source: source)
       return
     }
     self.audios[id] = Audio(source: source)
+
+    let handle: (Notification) -> Void = { notification in
+      var action = notification.name.rawValue
+      action = action.replacingOccurrences(of: "AudioEvent", with: "on")
+      self.callback(id: id, action: action, web: web)
+      if action == "onPlay" {
+        self.callback(id: id, action: "onPlaying", web: web)
+      }
+    }
+
+    let observe: (Notification.Name) -> Void = { name in
+      NotificationCenter.default.addObserver(
+        forName: name, object: self.audios[id], queue: OperationQueue.main,
+        using: handle
+      )
+    }
+
+    observe(AudioEvent.Play)
+    observe(AudioEvent.Pause)
+    observe(AudioEvent.Ended)
   }
 
   func setMetadata(id: String, data: [String: Any]) {
@@ -80,5 +101,20 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
       item.seek(to: to)
       return
     }
+  }
+
+  func callback(id: String, action: String, web: WKWebView) {
+    let template = """
+      document.dispatchEvent(
+        Object.assign(new Event("aduioCallback"), {
+          id: "%@",
+          action: "%@",
+        })
+      );
+      """
+    let code = String(format: template, id, action)
+
+    web.evaluateJavaScript(code)
+    NSLog("JGRGFD eval %@", code)
   }
 }

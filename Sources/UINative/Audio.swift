@@ -1,16 +1,56 @@
 import Foundation
 import MediaPlayer
 
-class Audio {
+class Audio: NSObject {
   static let player: AVPlayer = AVPlayer()
 
   private var item: AVPlayerItem?
   private var metadata: [String: Any] = [String: Any]()
+
   static private var rateObserver: NSKeyValueObservation!
   static private var statusObserver: NSObjectProtocol!
 
   init(source: String) {
+    super.init()
     self.setSource(source: source)
+
+    Audio.player.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(onNotification), name: .AVPlayerItemDidPlayToEndTime,
+      object: item
+    )
+  }
+
+  @objc func onNotification(_ notification: Notification) {
+    let center = NotificationCenter.default
+
+    switch notification.name {
+    case .AVPlayerItemDidPlayToEndTime:
+      center.post(name: AudioEvent.Ended, object: self)
+      break
+    default:
+      break
+    }
+  }
+
+  override func observeValue(
+    forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?,
+    context: UnsafeMutableRawPointer?
+  ) {
+    if keyPath == "rate", let player = object as? AVPlayer {
+      guard player.currentItem == self.item else { return }
+      guard let newValue = change?[.newKey] as? Float, let oldValue = change?[.oldKey] as? Float,
+        newValue != oldValue
+      else { return }
+
+      let center = NotificationCenter.default
+
+      if player.rate == 0.0 {
+        center.post(name: AudioEvent.Pause, object: self)
+      } else {
+        center.post(name: AudioEvent.Play, object: self)
+      }
+    }
   }
 
   func play() {
@@ -215,6 +255,12 @@ class Audio {
       self.updatePlayback()
     }
   }
+}
+
+struct AudioEvent {
+  static let Pause = Notification.Name("AudioEventPause")
+  static let Play = Notification.Name("AudioEventPlay")
+  static let Ended = Notification.Name("AudioEventEnded")
 }
 
 struct Metadata {
