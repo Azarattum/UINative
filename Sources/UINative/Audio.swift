@@ -19,6 +19,10 @@ class Audio: NSObject {
       self, selector: #selector(onNotification), name: .AVPlayerItemDidPlayToEndTime,
       object: item
     )
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(onNotification), name: .AVPlayerItemTimeJumped,
+      object: item
+    )
   }
 
   @objc func onNotification(_ notification: Notification) {
@@ -27,6 +31,9 @@ class Audio: NSObject {
     switch notification.name {
     case .AVPlayerItemDidPlayToEndTime:
       center.post(name: AudioEvent.Ended, object: self)
+      break
+    case .AVPlayerItemTimeJumped:
+      center.post(name: AudioEvent.Seeked, object: self)
       break
     default:
       break
@@ -236,7 +243,9 @@ class Audio: NSObject {
       seek(to: player.currentTime() - CMTime(seconds: event.interval, preferredTimescale: 1))
       return .success
     }
+  }
 
+  static func setupObservers() {
     player.addPeriodicTimeObserver(
       forInterval: CMTimeMakeWithSeconds(1, preferredTimescale: 1), queue: DispatchQueue.main
     ) { (CMTime) -> Void in
@@ -261,6 +270,7 @@ struct AudioEvent {
   static let Pause = Notification.Name("AudioEventPause")
   static let Play = Notification.Name("AudioEventPlay")
   static let Ended = Notification.Name("AudioEventEnded")
+  static let Seeked = Notification.Name("AudioEventSeeked")
 }
 
 struct Metadata {

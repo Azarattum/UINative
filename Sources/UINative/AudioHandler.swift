@@ -58,7 +58,13 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     let handle: (Notification) -> Void = { notification in
       var action = notification.name.rawValue
       action = action.replacingOccurrences(of: "AudioEvent", with: "on")
+
+      if action == "onSeeked" {
+        self.callback(id: id, action: "onSeeking", web: web)
+      }
+
       self.callback(id: id, action: action, web: web)
+
       if action == "onPlay" {
         self.callback(id: id, action: "onPlaying", web: web)
       }
@@ -74,6 +80,7 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.Play)
     observe(AudioEvent.Pause)
     observe(AudioEvent.Ended)
+    observe(AudioEvent.Seeked)
   }
 
   func setMetadata(id: String, data: [String: Any]) {
