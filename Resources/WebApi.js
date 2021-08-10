@@ -34,6 +34,10 @@ class NativeAudio extends Audio {
       this.use("pause");
     };
 
+    this.fastSeek = (value) => {
+      this.use("seek", value);
+    };
+
     Object.defineProperty(this, "currentTime", {
       set(value) {
         this.use("seek", value);

@@ -2,27 +2,58 @@ import Foundation
 import MediaPlayer
 
 class Audio: NSObject {
-  static let player: AVPlayer = AVPlayer()
+  static var current: Audio? = nil
 
-  private var item: AVPlayerItem?
+  private var player: AVPlayer = AVPlayer()
   private var metadata: [String: Any] = [String: Any]()
 
-  static private var rateObserver: NSKeyValueObservation!
-  static private var statusObserver: NSObjectProtocol!
+  private var timeObserver: Any?
+
+  private var isCurrent: Bool {
+    return Audio.current == self
+  }
 
   init(source: String) {
     super.init()
     self.setSource(source: source)
+  }
 
-    Audio.player.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
-    NotificationCenter.default.addObserver(
+  func registerObservers() {
+    player.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+    timeObserver = player.addPeriodicTimeObserver(
+      forInterval: CMTimeMakeWithSeconds(1, preferredTimescale: 1), queue: DispatchQueue.main
+    ) { (CMTime) -> Void in
+      if self.player.currentItem?.status == .readyToPlay && self.player.rate != 0.0 {
+        self.updatePlayback()
+      }
+    }
+
+    let center = NotificationCenter.default
+
+    center.addObserver(
       self, selector: #selector(onNotification), name: .AVPlayerItemDidPlayToEndTime,
-      object: item
+      object: player.currentItem
     )
-    NotificationCenter.default.addObserver(
+    center.addObserver(
+      self, selector: #selector(onNotification), name: .AVPlayerItemPlaybackStalled,
+      object: player.currentItem
+    )
+    center.addObserver(
       self, selector: #selector(onNotification), name: .AVPlayerItemTimeJumped,
-      object: item
+      object: player.currentItem
     )
+  }
+
+  func removeObservers() {
+    let center = NotificationCenter.default
+    center.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: player.currentItem)
+    center.removeObserver(self, name: .AVPlayerItemPlaybackStalled, object: player.currentItem)
+    center.removeObserver(self, name: .AVPlayerItemTimeJumped, object: player.currentItem)
+
+    player.removeObserver(self, forKeyPath: "rate")
+    if let observer = timeObserver {
+      player.removeTimeObserver(observer)
+    }
   }
 
   @objc func onNotification(_ notification: Notification) {
@@ -35,6 +66,9 @@ class Audio: NSObject {
     case .AVPlayerItemTimeJumped:
       center.post(name: AudioEvent.Seeked, object: self)
       break
+    case .AVPlayerItemPlaybackStalled:
+      center.post(name: AudioEvent.Stalled, object: self)
+      break
     default:
       break
     }
@@ -45,7 +79,6 @@ class Audio: NSObject {
     context: UnsafeMutableRawPointer?
   ) {
     if keyPath == "rate", let player = object as? AVPlayer {
-      guard player.currentItem == self.item else { return }
       guard let newValue = change?[.newKey] as? Float, let oldValue = change?[.oldKey] as? Float,
         newValue != oldValue
       else { return }
@@ -57,52 +90,75 @@ class Audio: NSObject {
       } else {
         center.post(name: AudioEvent.Play, object: self)
       }
+      updatePlayback()
     }
   }
 
   func play() {
-    if Audio.player.currentItem != self.item {
-      Audio.player.replaceCurrentItem(with: self.item)
-      self.updateMetadata()
+    if !isCurrent {
+      Audio.current?.stop()
+      Audio.current = self
+      registerObservers()
+      updateMetadata()
     }
 
-    Audio.player.play()
+    player.play()
   }
 
   func pause() {
-    if Audio.player.currentItem == self.item {
-      Audio.player.pause()
-    }
+    player.pause()
+  }
+
+  func stop() {
+    removeObservers()
+    pause()
+    seek(to: .zero)
+
+    timeObserver = nil
   }
 
   func seek(to: Double) {
-    if Audio.player.currentItem == self.item {
-      Audio.seek(to: to)
+    seek(to: CMTime(seconds: to, preferredTimescale: 1))
+  }
+
+  func seek(to: CMTime) {
+    player.seek(to: to) { _ in
+      self.updatePlayback()
     }
   }
 
   func setSource(source: String) {
-    ///Consider async loading
     let url = URL.init(string: source)
-    self.item = AVPlayerItem(url: url!)
+    let item = AVPlayerItem(url: url!)
 
     //Update duration when asset loads
     var observation: Any? = nil
-    observation = self.item!.observe(
+    observation = item.observe(
       \AVPlayerItem.status,
+      options: [.initial, .new],
       changeHandler: { observedItem, change in
         //Check when ready
         if observedItem.status == AVPlayerItem.Status.readyToPlay {
           self.metadata[MPMediaItemPropertyPlaybackDuration] =
             observedItem.duration.seconds
-          if Audio.player.currentItem == self.item {
+
+          let center = NotificationCenter.default
+          center.post(name: AudioEvent.Meta, object: self)
+
+          if self.isCurrent {
             self.updateMetadata()
+            self.updatePlayback()
           }
           if observation != nil {
             observation = nil
           }
+
+          center.post(name: AudioEvent.Loaded, object: self)
         }
       })
+
+    //This preloads the item
+    player.replaceCurrentItem(with: item)
   }
 
   func setMetadata(metadata: Metadata) {
@@ -134,7 +190,7 @@ class Audio: NSObject {
                 return albumArt
               })
 
-            if Audio.player.currentItem == self.item {
+            if self.isCurrent {
               self.updateMetadata()
             }
           }
@@ -145,29 +201,22 @@ class Audio: NSObject {
   }
 
   private func updateMetadata() {
+    if !isCurrent { return }
     if self.metadata.isEmpty { return }
 
     let infoCenter = MPNowPlayingInfoCenter.default()
     infoCenter.nowPlayingInfo = self.metadata
   }
 
-  static func seek(to: Double) {
-    seek(to: CMTime(seconds: to, preferredTimescale: 1))
-  }
-
-  static func seek(to: CMTime) {
-    player.seek(to: to) { _ in
-      updatePlayback()
-    }
-  }
-
-  static func updatePlayback() {
+  private func updatePlayback() {
+    if !isCurrent { return }
     let infoCenter = MPNowPlayingInfoCenter.default()
     var info = infoCenter.nowPlayingInfo ?? [String: Any]()
 
-    info[MPNowPlayingInfoPropertyPlaybackRate] = Audio.player.rate
-    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] =
-      Audio.player.currentItem?.currentTime().seconds ?? 0
+    info[MPNowPlayingInfoPropertyPlaybackRate] = player.rate
+    if let item = player.currentItem {
+      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = item.currentTime().seconds
+    }
 
     infoCenter.nowPlayingInfo = info
   }
@@ -177,8 +226,6 @@ class Audio: NSObject {
       try AVAudioSession.sharedInstance().setCategory(
         .playback, mode: AVAudioSession.Mode.default
       )
-
-      try AVAudioSession.sharedInstance().setActive(true)
     } catch {}
   }
 
@@ -186,82 +233,81 @@ class Audio: NSObject {
     let commandCenter = MPRemoteCommandCenter.shared()
 
     commandCenter.playCommand.addTarget { [self] event in
-      if self.player.rate == 0.0 {
-        self.player.play()
+      guard let audio = current else { return .commandFailed }
+
+      if audio.player.rate == 0.0 {
+        audio.player.play()
         return .success
       }
+
       return .commandFailed
     }
 
     commandCenter.pauseCommand.addTarget { [self] event in
-      if self.player.rate == 0.0 {
+      guard let audio = current else { return .commandFailed }
+
+      if audio.player.rate == 0.0 {
         return .commandFailed
       }
 
-      self.player.pause()
+      audio.player.pause()
       return .success
     }
 
     commandCenter.changePlaybackPositionCommand.addTarget { [self] event in
+      guard let audio = current else { return .commandFailed }
+
       let time = (event as! MPChangePlaybackPositionCommandEvent).positionTime
-      seek(to: time)
+      audio.seek(to: time)
       return .success
     }
 
     commandCenter.seekForwardCommand.addTarget { [self] event in
       guard let event = event as? MPSeekCommandEvent else { return .commandFailed }
-      self.player.rate = (event.type == .beginSeeking ? 3.0 : 1.0)
+      guard let audio = current else { return .commandFailed }
+
+      audio.player.rate = (event.type == .beginSeeking ? 3.0 : 1.0)
       return .success
     }
 
     commandCenter.seekBackwardCommand.addTarget { [self] event in
       guard let event = event as? MPSeekCommandEvent else { return .commandFailed }
-      self.player.rate = (event.type == .beginSeeking ? -3.0 : 1.0)
+      guard let audio = current else { return .commandFailed }
+
+      audio.player.rate = (event.type == .beginSeeking ? -3.0 : 1.0)
       return .success
     }
 
     commandCenter.nextTrackCommand.addTarget { [self] event in
-      seek(to: player.currentItem?.duration.seconds ?? 0)
-      return .success
+      if let item = current?.player.currentItem {
+        current!.seek(to: item.duration.seconds)
+        return .success
+      }
+      return .commandFailed
     }
 
     commandCenter.previousTrackCommand.addTarget { [self] event in
-      seek(to: 0)
+      guard let audio = current else { return .commandFailed }
+      audio.seek(to: .zero)
       return .success
     }
 
     commandCenter.skipForwardCommand.isEnabled = false
     commandCenter.skipForwardCommand.addTarget { [self] event in
       guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
-      seek(to: player.currentTime() + CMTime(seconds: event.interval, preferredTimescale: 1))
+      guard let audio = current else { return .commandFailed }
+      audio.seek(
+        to: audio.player.currentTime() + CMTime(seconds: event.interval, preferredTimescale: 1))
       return .success
     }
 
     commandCenter.skipBackwardCommand.isEnabled = false
     commandCenter.skipBackwardCommand.addTarget { [self] event in
       guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
-      seek(to: player.currentTime() - CMTime(seconds: event.interval, preferredTimescale: 1))
+      guard let audio = current else { return .commandFailed }
+      audio.seek(
+        to: audio.player.currentTime() - CMTime(seconds: event.interval, preferredTimescale: 1))
       return .success
-    }
-  }
-
-  static func setupObservers() {
-    player.addPeriodicTimeObserver(
-      forInterval: CMTimeMakeWithSeconds(1, preferredTimescale: 1), queue: DispatchQueue.main
-    ) { (CMTime) -> Void in
-      if player.currentItem?.status == .readyToPlay && player.rate != 0.0 {
-        updatePlayback()
-      }
-    }
-
-    rateObserver = player.observe(\.rate, options: .initial) {
-      [self] _, _ in
-      self.updatePlayback()
-    }
-
-    statusObserver = player.observe(\.currentItem?.status, options: .initial) {
-      [self] _, _ in
-      self.updatePlayback()
     }
   }
 }
@@ -271,6 +317,9 @@ struct AudioEvent {
   static let Play = Notification.Name("AudioEventPlay")
   static let Ended = Notification.Name("AudioEventEnded")
   static let Seeked = Notification.Name("AudioEventSeeked")
+  static let Stalled = Notification.Name("AudioEventStalled")
+  static let Meta = Notification.Name("AudioEventLoadedMetaData")
+  static let Loaded = Notification.Name("AudioEventLoadedData")
 }
 
 struct Metadata {

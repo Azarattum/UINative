@@ -81,6 +81,9 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.Pause)
     observe(AudioEvent.Ended)
     observe(AudioEvent.Seeked)
+    observe(AudioEvent.Stalled)
+    observe(AudioEvent.Meta)
+    observe(AudioEvent.Loaded)
   }
 
   func setMetadata(id: String, data: [String: Any]) {
