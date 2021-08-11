@@ -20,6 +20,9 @@ class Audio: NSObject {
 
   func registerObservers() {
     player.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+    player.currentItem?.addObserver(
+      self, forKeyPath: "playbackLikelyToKeepUp", options: [.initial], context: nil)
+
     timeObserver = player.addPeriodicTimeObserver(
       forInterval: CMTimeMake(value: 1, timescale: 3), queue: DispatchQueue.main
     ) { (CMTime) -> Void in
@@ -92,6 +95,10 @@ class Audio: NSObject {
       }
       updatePlayback()
     }
+
+    if keyPath == "playbackLikelyToKeepUp" && object is AVPlayerItem {
+      NotificationCenter.default.post(name: AudioEvent.CanPlayThrough, object: self)
+    }
   }
 
   func play() {
@@ -127,12 +134,12 @@ class Audio: NSObject {
     }
   }
 
-  func setRate(value: Float) {
-    if value != 0.0 && !isCurrent {
+  func setRate(to: Float) {
+    if to != 0.0 && !isCurrent {
       play()
     }
 
-    player.rate = value
+    player.rate = to
   }
 
   func setSource(source: String) {
@@ -166,6 +173,7 @@ class Audio: NSObject {
           }
 
           center.post(name: AudioEvent.Loaded, object: self)
+          center.post(name: AudioEvent.CanPlay, object: self)
         }
       })
 
@@ -348,6 +356,8 @@ struct AudioEvent {
   static let Time = Notification.Name("AudioEventTimeUpdate")
   static let Rate = Notification.Name("AudioEventRateChange")
   static let Duration = Notification.Name("AudioEventDurationChange")
+  static let CanPlay = Notification.Name("AudioEventCanPlay")
+  static let CanPlayThrough = Notification.Name("AudioEventCanPlayThrough")
 }
 
 struct Metadata {

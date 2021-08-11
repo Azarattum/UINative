@@ -93,6 +93,8 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.Time)
     observe(AudioEvent.Rate)
     observe(AudioEvent.Duration)
+    observe(AudioEvent.CanPlay)
+    observe(AudioEvent.CanPlayThrough)
   }
 
   func setMetadata(id: String, data: [String: Any]) {
@@ -123,7 +125,7 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
 
   func setRate(id: String, value: Float) {
     if let item = audios[id] {
-      item.setRate(value: value)
+      item.setRate(to: value)
     }
   }
 
