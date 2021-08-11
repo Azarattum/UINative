@@ -21,7 +21,7 @@ class Audio: NSObject {
   func registerObservers() {
     player.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
     timeObserver = player.addPeriodicTimeObserver(
-      forInterval: CMTimeMakeWithSeconds(1, preferredTimescale: 1), queue: DispatchQueue.main
+      forInterval: CMTimeMake(value: 1, timescale: 3), queue: DispatchQueue.main
     ) { (CMTime) -> Void in
       if self.player.currentItem?.status == .readyToPlay && self.player.rate != 0.0 {
         self.updatePlayback()
@@ -127,6 +127,14 @@ class Audio: NSObject {
     }
   }
 
+  func setRate(value: Float) {
+    if value != 0.0 && !isCurrent {
+      play()
+    }
+
+    player.rate = value
+  }
+
   func setSource(source: String) {
     let url = URL.init(string: source)
     let item = AVPlayerItem(url: url!)
@@ -139,11 +147,15 @@ class Audio: NSObject {
       changeHandler: { observedItem, change in
         //Check when ready
         if observedItem.status == AVPlayerItem.Status.readyToPlay {
-          self.metadata[MPMediaItemPropertyPlaybackDuration] =
-            observedItem.duration.seconds
+          let duration = observedItem.duration.seconds
+          self.metadata[MPMediaItemPropertyPlaybackDuration] = duration
 
           let center = NotificationCenter.default
           center.post(name: AudioEvent.Meta, object: self)
+          center.post(
+            name: AudioEvent.Duration, object: self,
+            userInfo: ["duration": duration]
+          )
 
           if self.isCurrent {
             self.updateMetadata()
@@ -210,12 +222,25 @@ class Audio: NSObject {
 
   private func updatePlayback() {
     if !isCurrent { return }
+
     let infoCenter = MPNowPlayingInfoCenter.default()
     var info = infoCenter.nowPlayingInfo ?? [String: Any]()
 
     info[MPNowPlayingInfoPropertyPlaybackRate] = player.rate
+
+    let center = NotificationCenter.default
+    center.post(
+      name: AudioEvent.Rate, object: self,
+      userInfo: ["rate": player.rate]
+    )
+
     if let item = player.currentItem {
       info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = item.currentTime().seconds
+
+      center.post(
+        name: AudioEvent.Time, object: self,
+        userInfo: ["time": item.currentTime().seconds]
+      )
     }
 
     infoCenter.nowPlayingInfo = info
@@ -320,6 +345,9 @@ struct AudioEvent {
   static let Stalled = Notification.Name("AudioEventStalled")
   static let Meta = Notification.Name("AudioEventLoadedMetaData")
   static let Loaded = Notification.Name("AudioEventLoadedData")
+  static let Time = Notification.Name("AudioEventTimeUpdate")
+  static let Rate = Notification.Name("AudioEventRateChange")
+  static let Duration = Notification.Name("AudioEventDurationChange")
 }
 
 struct Metadata {

@@ -24,6 +24,11 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
         guard let data = info["data"] as? [String: Any] else { break }
         self.setMetadata(id: id, data: data)
         break
+      case "setRate":
+        guard let id = info["id"] as? String else { break }
+        guard let data = info["data"] as? Float else { break }
+        self.setRate(id: id, value: data)
+        break
       case "play":
         guard let id = info["id"] as? String else { break }
         self.play(id: id)
@@ -58,15 +63,16 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     let handle: (Notification) -> Void = { notification in
       var action = notification.name.rawValue
       action = action.replacingOccurrences(of: "AudioEvent", with: "on")
+      let info = notification.userInfo
 
       if action == "onSeeked" {
-        self.callback(id: id, action: "onSeeking", web: web)
+        self.callback(web, id: id, action: "onSeeking", info: info)
       }
 
-      self.callback(id: id, action: action, web: web)
+      self.callback(web, id: id, action: action, info: info)
 
       if action == "onPlay" {
-        self.callback(id: id, action: "onPlaying", web: web)
+        self.callback(web, id: id, action: "onPlaying", info: info)
       }
     }
 
@@ -84,6 +90,9 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.Stalled)
     observe(AudioEvent.Meta)
     observe(AudioEvent.Loaded)
+    observe(AudioEvent.Time)
+    observe(AudioEvent.Rate)
+    observe(AudioEvent.Duration)
   }
 
   func setMetadata(id: String, data: [String: Any]) {
@@ -109,22 +118,36 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
   func seek(id: String, to: Double) {
     if let item = audios[id] {
       item.seek(to: to)
-      return
     }
   }
 
-  func callback(id: String, action: String, web: WKWebView) {
+  func setRate(id: String, value: Float) {
+    if let item = audios[id] {
+      item.setRate(value: value)
+    }
+  }
+
+  func callback(_ web: WKWebView, id: String, action: String, info: [AnyHashable: Any]?) {
     let template = """
       document.dispatchEvent(
         Object.assign(new Event("aduioCallback"), {
           id: "%@",
           action: "%@",
-        })
+        }, %@)
       );
       """
-    let code = String(format: template, id, action)
 
+    var jsonInfo: String = "{}"
+    do {
+      let data = try JSONSerialization.data(
+        withJSONObject: info ?? [AnyHashable: Any](), options: []
+      )
+      if let json = String(data: data, encoding: .utf8) {
+        jsonInfo = json
+      }
+    } catch {}
+
+    let code = String(format: template, id, action, jsonInfo)
     web.evaluateJavaScript(code)
-    NSLog("JGRGFD eval %@", code)
   }
 }
