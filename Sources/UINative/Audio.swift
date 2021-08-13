@@ -5,6 +5,7 @@ import UINativeC
 class Audio: NSObject {
   static var current: Audio? = nil
 
+  private var item: AVPlayerItem!
   private var player: AVPlayer = AVPlayer()
   private var metadata: [String: Any] = [String: Any]()
 
@@ -109,12 +110,17 @@ class Audio: NSObject {
       updatePlayback()
     }
 
-    if keyPath == "playbackLikelyToKeepUp" && object is AVPlayerItem {
-      NotificationCenter.default.post(name: AudioEvent.CanPlayThrough, object: self)
+    if keyPath == "playbackLikelyToKeepUp", let item = object as? AVPlayerItem {
+      if item.isPlaybackLikelyToKeepUp {
+        NotificationCenter.default.post(name: AudioEvent.CanPlayThrough, object: self)
+      }
     }
   }
 
   func play() {
+    if player.currentItem == nil {
+      load()
+    }
     if !isCurrent {
       Audio.current?.stop()
       Audio.current = self
@@ -147,6 +153,11 @@ class Audio: NSObject {
     }
   }
 
+  func load() {
+    //This starts track loading
+    player.replaceCurrentItem(with: item)
+  }
+
   func setVolume(to: Float) {
     VolumeController.setVolume(to)
   }
@@ -160,10 +171,28 @@ class Audio: NSObject {
   }
 
   func setSource(source: String) {
+    let center = NotificationCenter.default
+
     let url = URL.init(string: source)
     let item = AVPlayerItem(url: url!)
+    item.asset.loadValuesAsynchronously(forKeys: ["duration"]) {
+      let status = item.asset.statusOfValue(forKey: "duration", error: nil)
+      if status != .loaded { return }
 
-    //Update duration when asset loads
+      let duration = item.asset.duration.seconds
+      self.metadata[MPMediaItemPropertyPlaybackDuration] = duration
+      center.post(name: AudioEvent.Meta, object: self)
+      center.post(
+        name: AudioEvent.Duration, object: self,
+        userInfo: ["duration": duration]
+      )
+      center.post(
+        name: AudioEvent.Volume, object: self,
+        userInfo: ["volume": VolumeController.getVolume()]
+      )
+    }
+
+    //Check load status when asset loads
     var observation: Any? = nil
     observation = item.observe(
       \AVPlayerItem.status,
@@ -171,35 +200,21 @@ class Audio: NSObject {
       changeHandler: { observedItem, change in
         //Check when ready
         if observedItem.status == AVPlayerItem.Status.readyToPlay {
-          let duration = observedItem.duration.seconds
-          self.metadata[MPMediaItemPropertyPlaybackDuration] = duration
-
-          let center = NotificationCenter.default
-          center.post(name: AudioEvent.Meta, object: self)
-          center.post(
-            name: AudioEvent.Duration, object: self,
-            userInfo: ["duration": duration]
-          )
-
           if self.isCurrent {
             self.updateMetadata()
             self.updatePlayback()
           }
+          center.post(name: AudioEvent.Loaded, object: self)
+          center.post(name: AudioEvent.CanPlay, object: self)
+
           if observation != nil {
             observation = nil
           }
-
-          center.post(name: AudioEvent.Loaded, object: self)
-          center.post(name: AudioEvent.CanPlay, object: self)
-          center.post(
-            name: AudioEvent.Volume, object: self,
-            userInfo: ["volume": VolumeController.getVolume()]
-          )
         }
       })
 
-    //This preloads the item
-    player.replaceCurrentItem(with: item)
+    //Set the item
+    self.item = item
   }
 
   func setMetadata(metadata: Metadata) {

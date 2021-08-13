@@ -31,6 +31,7 @@ class NativeAudio extends Audio {
     this._duration = NaN;
     this._metadata = {};
     this._volume = NaN;
+    this._preload = "metadata";
     this._muted = 0;
     this._src = "";
 
@@ -120,9 +121,14 @@ class NativeAudio extends Audio {
     });
 
     Object.defineProperty(this, "preload", {
-      set() {},
+      set(value) {
+        if (value === "" || value === "auto") {
+          this.use("load");
+          this._preload = "auto";
+        }
+      },
       get() {
-        return "auto";
+        return this._preload;
       },
     });
 
