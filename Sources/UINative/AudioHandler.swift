@@ -26,8 +26,13 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
         break
       case "setRate":
         guard let id = info["id"] as? String else { break }
-        guard let data = info["data"] as? Float else { break }
-        self.setRate(id: id, value: data)
+        guard let data = info["data"] as? Double else { break }
+        self.setRate(id: id, value: Float(data))
+        break
+      case "setVolume":
+        guard let id = info["id"] as? String else { break }
+        guard let data = info["data"] as? Double else { break }
+        self.setVolume(id: id, value: Float(data))
         break
       case "play":
         guard let id = info["id"] as? String else { break }
@@ -95,6 +100,7 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.Duration)
     observe(AudioEvent.CanPlay)
     observe(AudioEvent.CanPlayThrough)
+    observe(AudioEvent.Volume)
   }
 
   func setMetadata(id: String, data: [String: Any]) {
@@ -126,6 +132,12 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
   func setRate(id: String, value: Float) {
     if let item = audios[id] {
       item.setRate(to: value)
+    }
+  }
+
+  func setVolume(id: String, value: Float) {
+    if let item = audios[id] {
+      item.setVolume(to: value)
     }
   }
 

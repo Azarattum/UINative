@@ -1,5 +1,6 @@
 import Foundation
 import MediaPlayer
+import UINativeC
 
 class Audio: NSObject {
   static var current: Audio? = nil
@@ -16,6 +17,12 @@ class Audio: NSObject {
   init(source: String) {
     super.init()
     self.setSource(source: source)
+
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(onNotification),
+      name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
+      object: nil
+    )
   }
 
   func registerObservers() {
@@ -71,6 +78,12 @@ class Audio: NSObject {
       break
     case .AVPlayerItemPlaybackStalled:
       center.post(name: AudioEvent.Stalled, object: self)
+      break
+    case NSNotification.Name("AVSystemController_SystemVolumeDidChangeNotification"):
+      center.post(
+        name: AudioEvent.Volume, object: self,
+        userInfo: ["volume": VolumeController.getVolume()]
+      )
       break
     default:
       break
@@ -134,6 +147,10 @@ class Audio: NSObject {
     }
   }
 
+  func setVolume(to: Float) {
+    VolumeController.setVolume(to)
+  }
+
   func setRate(to: Float) {
     if to != 0.0 && !isCurrent {
       play()
@@ -174,6 +191,10 @@ class Audio: NSObject {
 
           center.post(name: AudioEvent.Loaded, object: self)
           center.post(name: AudioEvent.CanPlay, object: self)
+          center.post(
+            name: AudioEvent.Volume, object: self,
+            userInfo: ["volume": VolumeController.getVolume()]
+          )
         }
       })
 
@@ -358,6 +379,7 @@ struct AudioEvent {
   static let Duration = Notification.Name("AudioEventDurationChange")
   static let CanPlay = Notification.Name("AudioEventCanPlay")
   static let CanPlayThrough = Notification.Name("AudioEventCanPlayThrough")
+  static let Volume = Notification.Name("AudioEventVolumeChange")
 }
 
 struct Metadata {

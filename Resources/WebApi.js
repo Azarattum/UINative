@@ -29,8 +29,10 @@ class NativeAudio extends Audio {
     this._playbackRate = 0.0;
     this._currentTime = 0.0;
     this._duration = NaN;
-    this._src = "";
     this._metadata = {};
+    this._volume = NaN;
+    this._muted = 0;
+    this._src = "";
 
     this.play = () => {
       this.use("play");
@@ -60,6 +62,34 @@ class NativeAudio extends Audio {
       },
       get() {
         return this._playbackRate;
+      },
+    });
+
+    Object.defineProperty(this, "volume", {
+      set(value) {
+        this.use("setVolume", value);
+      },
+      get() {
+        return this._volume;
+      },
+    });
+
+    Object.defineProperty(this, "muted", {
+      set(value) {
+        if (value) {
+          if (this._volume) {
+            this._muted = this._volume;
+            this.use("setVolume", 0);
+          }
+        } else {
+          if (this._muted) {
+            this.use("setVolume", this._muted);
+            this._muted = 0;
+          }
+        }
+      },
+      get() {
+        return !!this._muted;
       },
     });
 
@@ -98,9 +128,11 @@ class NativeAudio extends Audio {
 
     document.addEventListener("aduioCallback", (event) => {
       if (id === event.id && event.action) {
+        if (event.duration != null) this._duration = event.duration;
         if (event.rate != null) this._playbackRate = event.rate;
         if (event.time != null) this._currentTime = event.time;
-        if (event.duration != null) this._duration = event.duration;
+        if (event.volume != null) this._volume = event.volume;
+        if (this._muted && this._volume) this._muted = 0;
 
         let action = event.action;
         if (action.startsWith("on")) {
