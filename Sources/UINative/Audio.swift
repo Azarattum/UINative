@@ -18,12 +18,6 @@ class Audio: NSObject {
   init(source: String) {
     super.init()
     self.setSource(source: source)
-
-    NotificationCenter.default.addObserver(
-      self, selector: #selector(onNotification),
-      name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
-      object: nil
-    )
   }
 
   func registerObservers() {
@@ -158,6 +152,22 @@ class Audio: NSObject {
     player.replaceCurrentItem(with: item)
   }
 
+  func destroy() {
+    NotificationCenter.default.removeObserver(
+      self, name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
+      object: nil
+    )
+
+    stop()
+    item = nil
+    metadata = [String: Any]()
+    player.replaceCurrentItem(with: nil)
+    if isCurrent {
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+      Audio.current = nil
+    }
+  }
+
   func setVolume(to: Float) {
     VolumeController.setVolume(to)
   }
@@ -172,6 +182,16 @@ class Audio: NSObject {
 
   func setSource(source: String) {
     let center = NotificationCenter.default
+
+    center.removeObserver(
+      self, name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
+      object: nil
+    )
+    center.addObserver(
+      self, selector: #selector(onNotification),
+      name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
+      object: nil
+    )
 
     let url = URL.init(string: source)
     let item = AVPlayerItem(url: url!)
@@ -258,7 +278,6 @@ class Audio: NSObject {
 
   private func updateMetadata() {
     if !isCurrent { return }
-    if self.metadata.isEmpty { return }
 
     let infoCenter = MPNowPlayingInfoCenter.default()
     infoCenter.nowPlayingInfo = self.metadata

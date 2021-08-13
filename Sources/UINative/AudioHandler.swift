@@ -46,6 +46,10 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
         guard let id = info["id"] as? String else { break }
         self.pause(id: id)
         break
+      case "destroy":
+        guard let id = info["id"] as? String else { break }
+        self.destroy(id: id)
+        break
       case "seek":
         guard let id = info["id"] as? String else { break }
         guard let data = info["data"] as? Double else { break }
@@ -131,6 +135,13 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     if let item = audios[id] {
       item.pause()
       return
+    }
+  }
+
+  func destroy(id: String) {
+    if let item = audios[id] {
+      item.destroy()
+      audios.removeValue(forKey: id)
     }
   }
 

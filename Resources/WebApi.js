@@ -26,12 +26,13 @@ class NativeAudio extends Audio {
         data,
       });
 
+    this._preload = "metadata";
     this._playbackRate = 0.0;
     this._currentTime = 0.0;
+    this._destroyed = false;
     this._duration = NaN;
     this._metadata = {};
     this._volume = NaN;
-    this._preload = "metadata";
     this._muted = 0;
     this._src = "";
 
@@ -96,8 +97,10 @@ class NativeAudio extends Audio {
 
     Object.defineProperty(this, "src", {
       set(value) {
+        this._destroyed = false;
         this.use("setSource", value);
         this._src = value;
+        if (this._preload == "auto") this.use("load");
       },
       get() {
         return this._src;
@@ -123,12 +126,31 @@ class NativeAudio extends Audio {
     Object.defineProperty(this, "preload", {
       set(value) {
         if (value === "" || value === "auto") {
-          this.use("load");
+          if (this._src) this.use("load");
           this._preload = "auto";
         }
       },
       get() {
         return this._preload;
+      },
+    });
+
+    Object.defineProperty(this, "destroyed", {
+      set(value) {
+        if (value) {
+          this._playbackRate = 0.0;
+          this._currentTime = 0.0;
+          this._destroyed = true;
+          this._duration = NaN;
+          this._metadata = {};
+          this._volume = NaN;
+          this._muted = 0;
+          this._src = "";
+          this.use("destroy");
+        }
+      },
+      get() {
+        return this._destroyed;
       },
     });
 
