@@ -170,6 +170,10 @@ class NativeAudio extends Audio {
       }
     });
 
+    window.addEventListener("unload", () => {
+      this.destroyed = true;
+    });
+
     if (src) this.src = src;
   }
 }
