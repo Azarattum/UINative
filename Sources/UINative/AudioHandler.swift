@@ -1,7 +1,6 @@
 import WebKit
 
 class AudioHandler: NSObject, WKScriptMessageHandler {
-  ///Not clearing audios might cause a memory leak!
   var audios: [String: Audio] = Dictionary()
 
   func userContentController(
@@ -63,7 +62,6 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
 
   func enable() {
     Audio.setupSession()
-    Audio.setupControls()
   }
 
   func setSource(id: String, source: String, web: WKWebView) {
@@ -73,19 +71,24 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     }
     self.audios[id] = Audio(source: source)
 
-    let handle: (Notification) -> Void = { notification in
+    let handle: (Notification) -> Void = { [weak web] notification in
       var action = notification.name.rawValue
       action = action.replacingOccurrences(of: "AudioEvent", with: "on")
       let info = notification.userInfo
 
-      if action == "onSeeked" {
-        self.callback(web, id: id, action: "onSeeking", info: info)
+      if web == nil {
+        self.destroy(id: id)
+        return
       }
 
-      self.callback(web, id: id, action: action, info: info)
+      if action == "onSeeked" {
+        self.callback(web!, id: id, action: "onSeeking", info: info)
+      }
+
+      self.callback(web!, id: id, action: action, info: info)
 
       if action == "onPlay" {
-        self.callback(web, id: id, action: "onPlaying", info: info)
+        self.callback(web!, id: id, action: "onPlaying", info: info)
       }
     }
 

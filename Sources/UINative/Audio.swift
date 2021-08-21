@@ -4,6 +4,7 @@ import UINativeC
 
 class Audio: NSObject {
   static var current: Audio? = nil
+  static var controlTargets: [String: Any] = [String: Any]()
 
   private var item: AVPlayerItem!
   private var player: AVPlayer = AVPlayer()
@@ -27,9 +28,10 @@ class Audio: NSObject {
 
     timeObserver = player.addPeriodicTimeObserver(
       forInterval: CMTimeMake(value: 1, timescale: 3), queue: DispatchQueue.main
-    ) { (CMTime) -> Void in
-      if self.player.currentItem?.status == .readyToPlay && self.player.rate != 0.0 {
-        self.updatePlayback()
+    ) { [weak self] (CMTime) -> Void in
+      if self == nil || !self!.isCurrent { return }
+      if self!.player.currentItem?.status == .readyToPlay && self!.player.rate != 0.0 {
+        self!.updatePlayback()
       }
     }
 
@@ -101,6 +103,7 @@ class Audio: NSObject {
       } else {
         center.post(name: AudioEvent.Play, object: self)
       }
+
       updatePlayback()
     }
 
@@ -116,7 +119,12 @@ class Audio: NSObject {
       load()
     }
     if !isCurrent {
-      Audio.current?.stop()
+      if Audio.current == nil {
+        Audio.setupControls()
+      } else {
+        Audio.current!.stop()
+      }
+
       Audio.current = self
       registerObservers()
       updateMetadata()
@@ -142,8 +150,10 @@ class Audio: NSObject {
   }
 
   func seek(to: CMTime) {
-    player.seek(to: to) { _ in
-      self.updatePlayback()
+    player.seek(to: to) { [weak self] _ in
+      if self != nil && self!.isCurrent {
+        self!.updatePlayback()
+      }
     }
   }
 
@@ -157,15 +167,16 @@ class Audio: NSObject {
       self, name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
       object: nil
     )
+    if isCurrent {
+      Audio.current = nil
+      Audio.removeControls()
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
 
     stop()
     item = nil
     metadata = [String: Any]()
     player.replaceCurrentItem(with: nil)
-    if isCurrent {
-      MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-      Audio.current = nil
-    }
   }
 
   func setVolume(to: Float) {
@@ -217,12 +228,13 @@ class Audio: NSObject {
     observation = item.observe(
       \AVPlayerItem.status,
       options: [.initial, .new],
-      changeHandler: { observedItem, change in
+      changeHandler: { [weak self] observedItem, change in
+        guard self != nil else { return }
         //Check when ready
         if observedItem.status == AVPlayerItem.Status.readyToPlay {
-          if self.isCurrent {
-            self.updateMetadata()
-            self.updatePlayback()
+          if self!.isCurrent {
+            self!.updateMetadata()
+            self!.updatePlayback()
           }
           center.post(name: AudioEvent.Loaded, object: self)
           center.post(name: AudioEvent.CanPlay, object: self)
@@ -256,18 +268,19 @@ class Audio: NSObject {
     //Load cover image
     if metadata.cover != nil {
       if let url = URL(string: metadata.cover!) {
-        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
           guard let data = data else { return }
 
           if let albumArt = UIImage(data: data) {
-            self.metadata[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
+            guard self != nil else { return }
+            self!.metadata[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
               boundsSize: albumArt.size,
               requestHandler: { imageSize in
                 return albumArt
               })
 
-            if self.isCurrent {
-              self.updateMetadata()
+            if self!.isCurrent {
+              self!.updateMetadata()
             }
           }
         }
@@ -306,21 +319,24 @@ class Audio: NSObject {
       )
     }
 
+    if !isCurrent { return }
     infoCenter.nowPlayingInfo = info
   }
 
   static func setupSession() {
     do {
       try AVAudioSession.sharedInstance().setCategory(
-        .playback, mode: AVAudioSession.Mode.default
+        .playback, mode: .default
       )
     } catch {}
   }
 
   static func setupControls() {
+    removeControls()
+
     let commandCenter = MPRemoteCommandCenter.shared()
 
-    commandCenter.playCommand.addTarget { [self] event in
+    controlTargets["play"] = commandCenter.playCommand.addTarget { [self] event in
       guard let audio = current else { return .commandFailed }
 
       if audio.player.rate == 0.0 {
@@ -331,7 +347,7 @@ class Audio: NSObject {
       return .commandFailed
     }
 
-    commandCenter.pauseCommand.addTarget { [self] event in
+    controlTargets["pause"] = commandCenter.pauseCommand.addTarget { [self] event in
       guard let audio = current else { return .commandFailed }
 
       if audio.player.rate == 0.0 {
@@ -342,7 +358,9 @@ class Audio: NSObject {
       return .success
     }
 
-    commandCenter.changePlaybackPositionCommand.addTarget { [self] event in
+    controlTargets["changePlaybackPosition"] = commandCenter.changePlaybackPositionCommand.addTarget
+    {
+      [self] event in
       guard let audio = current else { return .commandFailed }
 
       let time = (event as! MPChangePlaybackPositionCommandEvent).positionTime
@@ -350,7 +368,7 @@ class Audio: NSObject {
       return .success
     }
 
-    commandCenter.seekForwardCommand.addTarget { [self] event in
+    controlTargets["seekForward"] = commandCenter.seekForwardCommand.addTarget { [self] event in
       guard let event = event as? MPSeekCommandEvent else { return .commandFailed }
       guard let audio = current else { return .commandFailed }
 
@@ -358,7 +376,7 @@ class Audio: NSObject {
       return .success
     }
 
-    commandCenter.seekBackwardCommand.addTarget { [self] event in
+    controlTargets["seekBackward"] = commandCenter.seekBackwardCommand.addTarget { [self] event in
       guard let event = event as? MPSeekCommandEvent else { return .commandFailed }
       guard let audio = current else { return .commandFailed }
 
@@ -366,7 +384,7 @@ class Audio: NSObject {
       return .success
     }
 
-    commandCenter.nextTrackCommand.addTarget { [self] event in
+    controlTargets["nextTrack"] = commandCenter.nextTrackCommand.addTarget { [self] event in
       if let item = current?.player.currentItem {
         current!.seek(to: item.duration.seconds)
         return .success
@@ -374,14 +392,14 @@ class Audio: NSObject {
       return .commandFailed
     }
 
-    commandCenter.previousTrackCommand.addTarget { [self] event in
+    controlTargets["previousTrack"] = commandCenter.previousTrackCommand.addTarget { [self] event in
       guard let audio = current else { return .commandFailed }
       audio.seek(to: .zero)
       return .success
     }
 
     commandCenter.skipForwardCommand.isEnabled = false
-    commandCenter.skipForwardCommand.addTarget { [self] event in
+    controlTargets["skipForward"] = commandCenter.skipForwardCommand.addTarget { [self] event in
       guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
       guard let audio = current else { return .commandFailed }
       audio.seek(
@@ -390,13 +408,28 @@ class Audio: NSObject {
     }
 
     commandCenter.skipBackwardCommand.isEnabled = false
-    commandCenter.skipBackwardCommand.addTarget { [self] event in
+    controlTargets["skipBackward"] = commandCenter.skipBackwardCommand.addTarget { [self] event in
       guard let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
       guard let audio = current else { return .commandFailed }
       audio.seek(
         to: audio.player.currentTime() - CMTime(seconds: event.interval, preferredTimescale: 1))
       return .success
     }
+  }
+
+  static func removeControls() {
+    let commandCenter = MPRemoteCommandCenter.shared()
+
+    commandCenter.pauseCommand.removeTarget(controlTargets["pause"])
+    commandCenter.playCommand.removeTarget(controlTargets["play"])
+    commandCenter.seekForwardCommand.removeTarget(controlTargets["seekForward"])
+    commandCenter.seekBackwardCommand.removeTarget(controlTargets["seekBackward"])
+    commandCenter.nextTrackCommand.removeTarget(controlTargets["nextTrack"])
+    commandCenter.previousTrackCommand.removeTarget(controlTargets["previousTrack"])
+    commandCenter.skipForwardCommand.removeTarget(controlTargets["skipForward"])
+    commandCenter.skipBackwardCommand.removeTarget(controlTargets["skipBackward"])
+    commandCenter.changePlaybackPositionCommand.removeTarget(
+      controlTargets["changePlaybackPosition"])
   }
 }
 
