@@ -70,7 +70,7 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
       return
     }
     self.audios[id] = Audio(source: source)
-
+    
     let handle: (Notification) -> Void = { [weak web] notification in
       var action = notification.name.rawValue
       action = action.replacingOccurrences(of: "AudioEvent", with: "on")
@@ -112,6 +112,13 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.CanPlay)
     observe(AudioEvent.CanPlayThrough)
     observe(AudioEvent.Volume)
+
+    //Observe when the webview is closed to destroy the audio
+    NotificationCenter.default.addObserver(
+      forName: WebViewEvent.Closed, object: web, queue: OperationQueue.main,
+      using: { _ in
+        self.destroy(id: id);
+    });
   }
 
   func setMetadata(id: String, data: [String: Any]) {
