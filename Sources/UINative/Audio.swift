@@ -5,6 +5,7 @@ import UINativeC
 class Audio: NSObject {
   static var current: Audio? = nil
   static var controlTargets: [String: Any] = [String: Any]()
+  static var interceptionObserver: Any?
 
   private var item: AVPlayerItem!
   private var player: AVPlayer = AVPlayer()
@@ -328,6 +329,34 @@ class Audio: NSObject {
       try AVAudioSession.sharedInstance().setCategory(
         .playback, mode: .default
       )
+      if let observer = self.interceptionObserver {
+        NotificationCenter.default.removeObserver(observer);
+      }
+      self.interceptionObserver = NotificationCenter.default.addObserver(
+        forName: AVAudioSession.interruptionNotification, object: nil, queue: OperationQueue.main,
+        using: { [self] notification in
+          guard let userInfo = notification.userInfo,
+            let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            return
+          }
+          
+          switch type {
+          case .ended:
+            guard let audio = self.current else { return }
+            audio.player.play()
+          default: break
+          }
+      })
+    } catch {}
+  }
+
+  static func closeSession() {
+    if let observer = self.interceptionObserver {
+      NotificationCenter.default.removeObserver(observer);
+    }
+    do {
+      try AVAudioSession.sharedInstance().setActive(false) 
     } catch {}
   }
 
