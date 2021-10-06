@@ -13,6 +13,36 @@ if (window.UINative) {
 }
 ```
 
+### Native Audio (with metadata)
+
+- Enable: `UINative.nativeAudio()`
+- Supported methods: `play`, `pause`, `fastSeek`
+- Supported properties: `currentTime`, `playbackRate`, `volume`, `muted`, `src`, `duration`, `preload`
+- Supported callbacks: `onplay`, `onplaying`, `onpause`, `onended`, `onseeking`, `onseeked`, `onloadeddata`, `onloadedmetadata`, `oncanplaythrough`, `ontimeupdate`, `onratechange`, `ondurationchange`, `onvolumechange`
+- New properties: `metadata`, `destroyed`
+- Example:
+```JavaScript
+if (window.UINative) {
+    UINative.nativeAudio();
+}
+
+const audio = new Audio("http://example.com/audio.mp3");
+audio.preload = "auto";
+audio.metadata = {
+    title: "A Song",
+    artist: "Somebody",
+    album: "Single",
+    year: 2042,
+    length: 42,
+    cover: "http://example.com/cover.jpg"
+};
+audio.play();
+audio.onended = () => {
+    audio.destroyed = true;
+};
+```
+Note that you need to set `audio.destroyed = true` when you are done with the audio object to avoid memory leaks!
+
 ## Building:
 This tweak is built with [orion](https://github.com/theos/orion) via [theos](https://github.com/theos/theos).
 
