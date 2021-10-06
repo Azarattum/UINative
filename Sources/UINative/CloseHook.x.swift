@@ -4,7 +4,7 @@ import WebKit
 class CloseHook: ClassHook<WKWebView> {
   func _close() {
     NotificationCenter.default.post(name: WebViewEvent.Closed, object: orig.target)
-    return orig._close();
+    return orig._close()
   }
 }
 

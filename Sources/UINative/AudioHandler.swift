@@ -2,6 +2,7 @@ import WebKit
 
 class AudioHandler: NSObject, WKScriptMessageHandler {
   var audios: [String: Audio] = Dictionary()
+  var observers: [String: Array<NSObjectProtocol>] = Dictionary()
 
   func userContentController(
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
@@ -65,38 +66,40 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
   }
 
   func setSource(id: String, source: String, web: WKWebView) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.setSource(source: source)
       return
     }
     self.audios[id] = Audio(source: source)
     
-    let handle: (Notification) -> Void = { [weak web] notification in
+    let handle: (Notification) -> Void = { [weak web, weak self] notification in
       var action = notification.name.rawValue
       action = action.replacingOccurrences(of: "AudioEvent", with: "on")
       let info = notification.userInfo
 
       if web == nil {
-        self.destroy(id: id)
+        self?.destroy(id: id)
         return
       }
 
       if action == "onSeeked" {
-        self.callback(web!, id: id, action: "onSeeking", info: info)
+        self?.callback(web!, id: id, action: "onSeeking", info: info)
       }
 
-      self.callback(web!, id: id, action: action, info: info)
+      self?.callback(web!, id: id, action: action, info: info)
 
       if action == "onPlay" {
-        self.callback(web!, id: id, action: "onPlaying", info: info)
+        self?.callback(web!, id: id, action: "onPlaying", info: info)
       }
     }
 
-    let observe: (Notification.Name) -> Void = { name in
-      NotificationCenter.default.addObserver(
-        forName: name, object: self.audios[id], queue: OperationQueue.main,
+    let observe: (Notification.Name) -> Void = { [weak self] name in
+      guard self != nil else { return }
+      let token = NotificationCenter.default.addObserver(
+        forName: name, object: self!.audios[id], queue: OperationQueue.main,
         using: handle
       )
+      self!.observers[id, default: []].append(token)
     }
 
     observe(AudioEvent.Play)
@@ -114,11 +117,12 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.Volume)
 
     //Observe when the webview is closed to destroy the audio
-    NotificationCenter.default.addObserver(
+    let token = NotificationCenter.default.addObserver(
       forName: WebViewEvent.Closed, object: web, queue: OperationQueue.main,
-      using: { _ in
-        self.destroy(id: id);
-    });
+      using: { [weak self] _ in
+        self?.destroy(id: id)
+    })
+    self.observers[id, default: []].append(token)
   }
 
   func setMetadata(id: String, data: [String: Any]) {
@@ -128,47 +132,51 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
   }
 
   func load(id: String) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.load()
-      return
     }
   }
 
   func play(id: String) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.play()
-      return
     }
   }
 
   func pause(id: String) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.pause()
-      return
     }
   }
 
   func destroy(id: String) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.destroy()
-      audios.removeValue(forKey: id)
+      self.audios.removeValue(forKey: id)
+    }
+    if let tokens = self.observers[id] {
+      let center = NotificationCenter.default
+      for token in tokens {
+        center.removeObserver(token)
+      }
+      self.observers.removeValue(forKey: id)
     }
   }
 
   func seek(id: String, to: Double) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.seek(to: to)
     }
   }
 
   func setRate(id: String, value: Float) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.setRate(to: value)
     }
   }
 
   func setVolume(id: String, value: Float) {
-    if let item = audios[id] {
+    if let item = self.audios[id] {
       item.setVolume(to: value)
     }
   }
@@ -195,5 +203,13 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
 
     let code = String(format: template, id, action, jsonInfo)
     web.evaluateJavaScript(code)
+  }
+
+  deinit {
+    for id in self.audios.keys {
+      self.destroy(id: id)
+    }
+    Audio.removeControls()
+    Audio.closeSession()
   }
 }
