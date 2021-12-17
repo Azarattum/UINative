@@ -47,7 +47,7 @@ class Audio: NSObject {
       object: player.currentItem
     )
     center.addObserver(
-      self, selector: #selector(onNotification), name: .AVPlayerItemTimeJumped,
+      self, selector: #selector(onNotification), name: AVPlayerItem.timeJumpedNotification,
       object: player.currentItem
     )
   }
@@ -56,7 +56,7 @@ class Audio: NSObject {
     let center = NotificationCenter.default
     center.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: player.currentItem)
     center.removeObserver(self, name: .AVPlayerItemPlaybackStalled, object: player.currentItem)
-    center.removeObserver(self, name: .AVPlayerItemTimeJumped, object: player.currentItem)
+    center.removeObserver(self, name: AVPlayerItem.timeJumpedNotification, object: player.currentItem)
 
     player.removeObserver(self, forKeyPath: "rate")
     if let observer = timeObserver {
@@ -71,7 +71,7 @@ class Audio: NSObject {
     case .AVPlayerItemDidPlayToEndTime:
       center.post(name: AudioEvent.Ended, object: self)
       break
-    case .AVPlayerItemTimeJumped:
+    case AVPlayerItem.timeJumpedNotification:
       center.post(name: AudioEvent.Seeked, object: self)
       break
     case .AVPlayerItemPlaybackStalled:
