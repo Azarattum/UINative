@@ -13,16 +13,20 @@ class Audio: NSObject {
 
   private var timeObserver: Any?
 
+  private var isObserved = false;
   private var isCurrent: Bool {
     return Audio.current == self
   }
 
   init(source: String) {
     super.init()
+    player.automaticallyWaitsToMinimizeStalling = false;
     self.setSource(source: source)
   }
 
   func registerObservers() {
+    if self.isObserved { return; }
+
     player.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
     player.currentItem?.addObserver(
       self, forKeyPath: "playbackLikelyToKeepUp", options: [.initial], context: nil)
@@ -50,18 +54,23 @@ class Audio: NSObject {
       self, selector: #selector(onNotification), name: AVPlayerItem.timeJumpedNotification,
       object: player.currentItem
     )
+
+    self.isObserved = true;
   }
 
   func removeObservers() {
+    guard self.isObserved else { return; }
     let center = NotificationCenter.default
     center.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: player.currentItem)
     center.removeObserver(self, name: .AVPlayerItemPlaybackStalled, object: player.currentItem)
     center.removeObserver(self, name: AVPlayerItem.timeJumpedNotification, object: player.currentItem)
 
     player.removeObserver(self, forKeyPath: "rate")
+    player.currentItem?.removeObserver(self, forKeyPath: "playbackLikelyToKeepUp")
     if let observer = timeObserver {
       player.removeTimeObserver(observer)
     }
+    self.isObserved = false;
   }
 
   @objc func onNotification(_ notification: Notification) {
