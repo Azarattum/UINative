@@ -32,6 +32,7 @@ class NativeAudio extends Audio {
     this._destroyed = false;
     this._duration = NaN;
     this._metadata = {};
+    this._paused = true;
     this._volume = NaN;
     this._muted = 0;
     this._src = "";
@@ -97,6 +98,10 @@ class NativeAudio extends Audio {
 
     Object.defineProperty(this, "src", {
       set(value) {
+        if (!value) {
+          this.destroyed = true;
+          return;
+        }
         this._destroyed = false;
         this.use("setSource", value);
         this._src = value;
@@ -137,7 +142,7 @@ class NativeAudio extends Audio {
 
     Object.defineProperty(this, "destroyed", {
       set(value) {
-        if (value) {
+        if (value && !this._destroyed) {
           this._playbackRate = 0.0;
           this._currentTime = 0.0;
           this._destroyed = true;
@@ -154,10 +159,19 @@ class NativeAudio extends Audio {
       },
     });
 
+    Object.defineProperty(this, "paused", {
+      get() {
+        return this._paused;
+      },
+    });
+
     document.addEventListener("aduioCallback", (event) => {
       if (id === event.id && event.action) {
         if (event.duration != null) this._duration = event.duration;
-        if (event.rate != null) this._playbackRate = event.rate;
+        if (event.rate != null) {
+          this._playbackRate = event.rate;
+          this._paused = !!event.rate;
+        }
         if (event.time != null) this._currentTime = event.time;
         if (event.volume != null) this._volume = event.volume;
         if (this._muted && this._volume) this._muted = 0;
