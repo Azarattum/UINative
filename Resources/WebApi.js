@@ -170,7 +170,7 @@ class NativeAudio extends Audio {
         if (event.duration != null) this._duration = event.duration;
         if (event.rate != null) {
           this._playbackRate = event.rate;
-          this._paused = !!event.rate;
+          this._paused = !event.rate;
         }
         if (event.time != null) this._currentTime = event.time;
         if (event.volume != null) this._volume = event.volume;

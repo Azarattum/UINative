@@ -108,6 +108,7 @@ class Audio: NSObject {
 
       let center = NotificationCenter.default
 
+      center.post(name: AudioEvent.Rate, object: self, userInfo: ["rate": player.rate])
       if player.rate == 0.0 {
         center.post(name: AudioEvent.Pause, object: self)
       } else {
@@ -315,11 +316,6 @@ class Audio: NSObject {
     info[MPNowPlayingInfoPropertyPlaybackRate] = player.rate
 
     let center = NotificationCenter.default
-    center.post(
-      name: AudioEvent.Rate, object: self,
-      userInfo: ["rate": player.rate]
-    )
-
     if let item = player.currentItem {
       info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = item.currentTime().seconds
 
