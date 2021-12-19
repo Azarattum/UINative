@@ -31,6 +31,7 @@ class NativeAudio extends Audio {
     this._currentTime = 0.0;
     this._destroyed = false;
     this._duration = NaN;
+    this._seekTime = NaN;
     this._metadata = {};
     this._paused = true;
     this._volume = NaN;
@@ -46,15 +47,18 @@ class NativeAudio extends Audio {
     };
 
     this.fastSeek = (value) => {
+      this._seekTime = value;
       this.use("seek", value);
     };
 
     Object.defineProperty(this, "currentTime", {
       set(value) {
+        this._seekTime = value;
         this.use("seek", value);
       },
       get() {
         if (this._currentTime < 0) return 0;
+        if (!Number.isNaN(this._seekTime)) return this._seekTime;
         return this._currentTime;
       },
     });
@@ -172,7 +176,12 @@ class NativeAudio extends Audio {
           this._playbackRate = event.rate;
           this._paused = !event.rate;
         }
-        if (event.time != null) this._currentTime = event.time;
+        if (event.time != null) {
+          this._currentTime = event.time;
+          if (Math.abs(event.time - this._seekTime) <= 1) {
+            this._seekTime = NaN;
+          }
+        }
         if (event.volume != null) this._volume = event.volume;
         if (this._muted && this._volume) this._muted = 0;
 
