@@ -17,7 +17,7 @@ if (window.UINative) {
 
 - Enable: `UINative.nativeAudio()`
 - Supported methods: `play`, `pause`, `fastSeek`
-- Supported properties: `currentTime`, `playbackRate`, `volume`, `muted`, `src`, `duration`, `preload`, `paused`
+- Supported properties: `currentTime`, `playbackRate`, `volume`, `muted`, `src`, `duration`, `preload`, `paused`, `ended`
 - Supported callbacks: `onplay`, `onplaying`, `onpause`, `onended`, `onseeking`, `onseeked`, `onloadeddata`, `onloadedmetadata`, `oncanplaythrough`, `ontimeupdate`, `onratechange`, `ondurationchange`, `onvolumechange`
 - New properties: `metadata`, `destroyed`
 - Example:

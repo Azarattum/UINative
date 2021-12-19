@@ -13,19 +13,20 @@ class Audio: NSObject {
 
   private var timeObserver: Any?
 
-  private var isObserved = false;
+  private var isEnded = false
+  private var isObserved = false
   private var isCurrent: Bool {
     return Audio.current == self
   }
 
   init(source: String) {
     super.init()
-    player.automaticallyWaitsToMinimizeStalling = false;
+    player.automaticallyWaitsToMinimizeStalling = false
     self.setSource(source: source)
   }
 
   func registerObservers() {
-    if self.isObserved { return; }
+    if self.isObserved { return }
 
     player.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
     player.currentItem?.addObserver(
@@ -55,11 +56,11 @@ class Audio: NSObject {
       object: player.currentItem
     )
 
-    self.isObserved = true;
+    self.isObserved = true
   }
 
   func removeObservers() {
-    guard self.isObserved else { return; }
+    guard self.isObserved else { return }
     let center = NotificationCenter.default
     center.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: player.currentItem)
     center.removeObserver(self, name: .AVPlayerItemPlaybackStalled, object: player.currentItem)
@@ -70,7 +71,7 @@ class Audio: NSObject {
     if let observer = timeObserver {
       player.removeTimeObserver(observer)
     }
-    self.isObserved = false;
+    self.isObserved = false
   }
 
   @objc func onNotification(_ notification: Notification) {
@@ -78,6 +79,7 @@ class Audio: NSObject {
 
     switch notification.name {
     case .AVPlayerItemDidPlayToEndTime:
+      self.isEnded = true
       center.post(name: AudioEvent.Ended, object: self)
       break
     case AVPlayerItem.timeJumpedNotification:
@@ -141,6 +143,9 @@ class Audio: NSObject {
       updateMetadata()
     }
 
+    if (self.isEnded) {
+      seek(to: .zero)
+    }
     player.play()
   }
 
@@ -161,6 +166,7 @@ class Audio: NSObject {
   }
 
   func seek(to: CMTime) {
+    self.isEnded = false
     player.seek(to: to) { [weak self] _ in
       if self != nil && self!.isCurrent {
         self!.updatePlayback()
@@ -174,6 +180,7 @@ class Audio: NSObject {
   }
 
   func destroy() {
+    self.isEnded = false
     NotificationCenter.default.removeObserver(
       self, name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
       object: nil
@@ -257,6 +264,7 @@ class Audio: NSObject {
       })
 
     //Set the item
+    self.isEnded = false
     self.item = item
   }
 
@@ -335,7 +343,7 @@ class Audio: NSObject {
         .playback, mode: .default
       )
       if let observer = self.interceptionObserver {
-        NotificationCenter.default.removeObserver(observer);
+        NotificationCenter.default.removeObserver(observer)
       }
       self.interceptionObserver = NotificationCenter.default.addObserver(
         forName: AVAudioSession.interruptionNotification, object: nil, queue: OperationQueue.main,
@@ -358,7 +366,7 @@ class Audio: NSObject {
 
   static func closeSession() {
     if let observer = self.interceptionObserver {
-      NotificationCenter.default.removeObserver(observer);
+      NotificationCenter.default.removeObserver(observer)
     }
     do {
       try AVAudioSession.sharedInstance().setActive(false) 

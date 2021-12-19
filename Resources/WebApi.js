@@ -33,6 +33,7 @@ class NativeAudio extends Audio {
     this._duration = NaN;
     this._seekTime = NaN;
     this._metadata = {};
+    this._ended = false;
     this._paused = true;
     this._volume = NaN;
     this._muted = 0;
@@ -47,6 +48,7 @@ class NativeAudio extends Audio {
     };
 
     this.fastSeek = (value) => {
+      this._ended = false;
       this._seekTime = value;
       this.use("seek", value);
     };
@@ -60,6 +62,11 @@ class NativeAudio extends Audio {
         if (this._currentTime < 0) return 0;
         if (!Number.isNaN(this._seekTime)) return this._seekTime;
         return this._currentTime;
+      },
+    });
+    Object.defineProperty(this, "ended", {
+      get() {
+        return this._ended;
       },
     });
 
@@ -106,6 +113,7 @@ class NativeAudio extends Audio {
           this.destroyed = true;
           return;
         }
+        this._ended = false;
         this._destroyed = false;
         this.use("setSource", value);
         this._src = value;
@@ -151,7 +159,9 @@ class NativeAudio extends Audio {
           this._currentTime = 0.0;
           this._destroyed = true;
           this._duration = NaN;
+          this._paused = false;
           this._metadata = {};
+          this._ended = false;
           this._volume = NaN;
           this._muted = 0;
           this._src = "";
@@ -172,6 +182,9 @@ class NativeAudio extends Audio {
     document.addEventListener("aduioCallback", (event) => {
       if (id === event.id && event.action) {
         if (event.duration != null) this._duration = event.duration;
+        if (event.volume != null) this._volume = event.volume;
+        if (event.action === "onEnded") this._ended = true;
+        if (this._muted && this._volume) this._muted = 0;
         if (event.rate != null) {
           this._playbackRate = event.rate;
           this._paused = !event.rate;
@@ -181,9 +194,10 @@ class NativeAudio extends Audio {
           if (Math.abs(event.time - this._seekTime) <= 1) {
             this._seekTime = NaN;
           }
+          if (Math.abs(event.time - this._duration) >= 1) {
+            this._ended = false;
+          }
         }
-        if (event.volume != null) this._volume = event.volume;
-        if (this._muted && this._volume) this._muted = 0;
 
         let action = event.action;
         if (action.startsWith("on")) {
