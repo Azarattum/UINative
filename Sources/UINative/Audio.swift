@@ -382,6 +382,9 @@ class Audio: NSObject {
       guard let audio = current else { return .commandFailed }
 
       if audio.player.rate == 0.0 {
+        if (audio.isEnded) {
+          audio.seek(to: .zero)
+        }
         audio.player.play()
         return .success
       }
