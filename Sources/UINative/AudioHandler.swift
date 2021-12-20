@@ -115,6 +115,8 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
     observe(AudioEvent.CanPlay)
     observe(AudioEvent.CanPlayThrough)
     observe(AudioEvent.Volume)
+    observe(AudioEvent.Next)
+    observe(AudioEvent.Previous)
 
     //Observe when the webview is closed to destroy the audio
     let token = NotificationCenter.default.addObserver(

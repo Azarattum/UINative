@@ -19,6 +19,7 @@ if (window.UINative) {
 - Supported methods: `play`, `pause`, `fastSeek`
 - Supported properties: `currentTime`, `playbackRate`, `volume`, `muted`, `src`, `duration`, `preload`, `paused`, `ended`
 - Supported callbacks: `onplay`, `onplaying`, `onpause`, `onended`, `onseeking`, `onseeked`, `onloadeddata`, `onloadedmetadata`, `oncanplaythrough`, `ontimeupdate`, `onratechange`, `ondurationchange`, `onvolumechange`
+- New callbacks: `onnext`, `onprevious`
 - New properties: `metadata`, `destroyed`
 - Example:
 ```JavaScript

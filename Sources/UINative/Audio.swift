@@ -430,16 +430,18 @@ class Audio: NSObject {
     }
 
     controlTargets["nextTrack"] = commandCenter.nextTrackCommand.addTarget { [self] event in
-      if let item = current?.player.currentItem {
-        current!.seek(to: item.duration.seconds)
-        return .success
-      }
-      return .commandFailed
+      guard let audio = current else { return .commandFailed }
+      NotificationCenter.default.post(name: AudioEvent.Next, object: audio)
+      return .success
     }
 
     controlTargets["previousTrack"] = commandCenter.previousTrackCommand.addTarget { [self] event in
       guard let audio = current else { return .commandFailed }
-      audio.seek(to: .zero)
+      if (audio.player.currentTime().seconds < 4) {
+        NotificationCenter.default.post(name: AudioEvent.Previous, object: audio)
+      } else {
+        audio.seek(to: .zero)
+      }
       return .success
     }
 
@@ -492,6 +494,9 @@ struct AudioEvent {
   static let CanPlay = Notification.Name("AudioEventCanPlay")
   static let CanPlayThrough = Notification.Name("AudioEventCanPlayThrough")
   static let Volume = Notification.Name("AudioEventVolumeChange")
+
+  static let Next = Notification.Name("AudioEventNext")
+  static let Previous = Notification.Name("AudioEventPrevious")
 }
 
 struct Metadata {
