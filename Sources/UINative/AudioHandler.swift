@@ -2,7 +2,7 @@ import WebKit
 
 class AudioHandler: NSObject, WKScriptMessageHandler {
   var audios: [String: Audio] = Dictionary()
-  var observers: [String: Array<NSObjectProtocol>] = Dictionary()
+  var observers: [String: [NSObjectProtocol]] = Dictionary()
 
   func userContentController(
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
@@ -71,7 +71,7 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
       return
     }
     self.audios[id] = Audio(source: source)
-    
+
     let handle: (Notification) -> Void = { [weak web, weak self] notification in
       var action = notification.name.rawValue
       action = action.replacingOccurrences(of: "AudioEvent", with: "on")
@@ -123,7 +123,7 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
       forName: WebViewEvent.Closed, object: web, queue: OperationQueue.main,
       using: { [weak self] _ in
         self?.destroy(id: id)
-    })
+      })
     self.observers[id, default: []].append(token)
   }
 
@@ -186,7 +186,7 @@ class AudioHandler: NSObject, WKScriptMessageHandler {
   func callback(_ web: WKWebView, id: String, action: String, info: [AnyHashable: Any]?) {
     let template = """
       document.dispatchEvent(
-        Object.assign(new Event("aduioCallback"), {
+        Object.assign(new Event("audioCallback"), {
           id: "%@",
           action: "%@",
         }, %@)

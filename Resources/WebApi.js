@@ -5,7 +5,7 @@ window.UINative = {
 
   nativeAudio: () => {
     {
-      document.createEvent("Event").initEvent("aduioCallback", false, false);
+      document.createEvent("Event").initEvent("audioCallback", false, false);
       window.webkit.messageHandlers.audio.postMessage({
         action: "enable",
       });
@@ -179,7 +179,7 @@ class NativeAudio extends Audio {
       },
     });
 
-    document.addEventListener("aduioCallback", (event) => {
+    document.addEventListener("audioCallback", (event) => {
       if (id === event.id && event.action) {
         if (event.duration != null) this._duration = event.duration;
         if (event.volume != null) this._volume = event.volume;
