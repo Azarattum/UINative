@@ -1,6 +1,5 @@
 import Foundation
 import MediaPlayer
-import UINativeC
 
 class Audio: NSObject {
   static var current: Audio? = nil
@@ -64,7 +63,8 @@ class Audio: NSObject {
     let center = NotificationCenter.default
     center.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: player.currentItem)
     center.removeObserver(self, name: .AVPlayerItemPlaybackStalled, object: player.currentItem)
-    center.removeObserver(self, name: AVPlayerItem.timeJumpedNotification, object: player.currentItem)
+    center.removeObserver(
+      self, name: AVPlayerItem.timeJumpedNotification, object: player.currentItem)
 
     player.removeObserver(self, forKeyPath: "rate")
     player.currentItem?.removeObserver(self, forKeyPath: "playbackLikelyToKeepUp")
@@ -91,7 +91,7 @@ class Audio: NSObject {
     case NSNotification.Name("AVSystemController_SystemVolumeDidChangeNotification"):
       center.post(
         name: AudioEvent.Volume, object: self,
-        userInfo: ["volume": VolumeController.getVolume()]
+        userInfo: ["volume": player.volume]
       )
       break
     default:
@@ -143,7 +143,7 @@ class Audio: NSObject {
       updateMetadata()
     }
 
-    if (self.isEnded) {
+    if self.isEnded {
       seek(to: .zero)
     }
     player.play()
@@ -198,7 +198,7 @@ class Audio: NSObject {
   }
 
   func setVolume(to: Float) {
-    VolumeController.setVolume(to)
+    player.volume = to
   }
 
   func setRate(to: Float) {
@@ -211,16 +211,6 @@ class Audio: NSObject {
 
   func setSource(source: String) {
     let center = NotificationCenter.default
-
-    center.removeObserver(
-      self, name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
-      object: nil
-    )
-    center.addObserver(
-      self, selector: #selector(onNotification),
-      name: Notification.Name("AVSystemController_SystemVolumeDidChangeNotification"),
-      object: nil
-    )
 
     let url = URL.init(string: source)
     let item = AVPlayerItem(url: url!)
@@ -237,7 +227,7 @@ class Audio: NSObject {
       )
       center.post(
         name: AudioEvent.Volume, object: self,
-        userInfo: ["volume": VolumeController.getVolume()]
+        userInfo: ["volume": self.player.volume]
       )
     }
 
@@ -350,17 +340,18 @@ class Audio: NSObject {
         using: { [self] notification in
           guard let userInfo = notification.userInfo,
             let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
-            let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+          else {
             return
           }
-          
+
           switch type {
           case .ended:
             guard let audio = self.current else { return }
             audio.player.play()
           default: break
           }
-      })
+        })
     } catch {}
   }
 
@@ -369,7 +360,7 @@ class Audio: NSObject {
       NotificationCenter.default.removeObserver(observer)
     }
     do {
-      try AVAudioSession.sharedInstance().setActive(false) 
+      try AVAudioSession.sharedInstance().setActive(false)
     } catch {}
   }
 
@@ -382,7 +373,7 @@ class Audio: NSObject {
       guard let audio = current else { return .commandFailed }
 
       if audio.player.rate == 0.0 {
-        if (audio.isEnded) {
+        if audio.isEnded {
           audio.seek(to: .zero)
         }
         audio.player.play()
@@ -437,7 +428,7 @@ class Audio: NSObject {
 
     controlTargets["previousTrack"] = commandCenter.previousTrackCommand.addTarget { [self] event in
       guard let audio = current else { return .commandFailed }
-      if (audio.player.currentTime().seconds < 4) {
+      if audio.player.currentTime().seconds < 4 {
         NotificationCenter.default.post(name: AudioEvent.Previous, object: audio)
       } else {
         audio.seek(to: .zero)

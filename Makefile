@@ -8,7 +8,6 @@ TWEAK_NAME = UINative
 
 UINative_FILES = $(shell find Sources/UINative -name '*.swift') $(shell find Sources/UINativeC -name '*.m' -o -name '*.c' -o -name '*.mm' -o -name '*.cpp')
 UINative_SWIFTFLAGS = -ISources/UINativeC/include
-UINative_PRIVATE_FRAMEWORKS = Celestial
 UINative_CFLAGS = -fobjc-arc
 
 include $(THEOS_MAKE_PATH)/tweak.mk
